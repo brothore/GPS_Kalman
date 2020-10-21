@@ -1,5 +1,5 @@
 CC = g++  
-BIN = demo
+BIN = gpsKalmanServer
 
 CFLAGS += -std=c++11 -Wall -g -fPIC -Iheaders  
 BUILD_DIR = build
