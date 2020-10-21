@@ -11,16 +11,16 @@ using namespace std;
 bool gpsparser(char* data, double* lon, double* lat, double* HDOP, int* numSV) {
 	string const str(data);
 	string slon, slat, sHDOP, snumSV, sposMode, snavStatus, checksum; //sposMode, snavStatus for future useage;
-	string const header("GNGNS");
+	string const header("GPGGA");
 	char cs;
 	unsigned int cnt = str.find(header);
 	if (cnt > str.size()){
-		cerr<<"No header!!!"<<endl;
+		//cerr<<"No header!!!"<<endl;
 		return false;
 	}
 	else
 		cnt += 6; // $GNGPS,
-	cs = 0 ^'G' ^ 'N' ^ 'G' ^ 'N' ^ 'S' ^ ',';
+	cs = 0 ^'G' ^ 'P' ^ 'G' ^ 'G' ^ 'A' ^ ',';
 
 	int comma = 0;
 	while (cnt < str.size() && str[cnt] != '\r' && str[cnt]!='\n') {
@@ -44,7 +44,7 @@ bool gpsparser(char* data, double* lon, double* lat, double* HDOP, int* numSV) {
 				break;
 			case 11: snavStatus += str[cnt];
 				break;
-			case 12: checksum += str[cnt];
+		//	case 12: checksum += str[cnt];
 			default: break;
 			}
 			break;
@@ -54,6 +54,7 @@ bool gpsparser(char* data, double* lon, double* lat, double* HDOP, int* numSV) {
 		++cnt;
 	}
 	//safe check sum
+#if 0
 	if (checksum.size() != 2) {
 		cerr << "checksum error: len" << endl;
 		return false;
@@ -76,7 +77,7 @@ bool gpsparser(char* data, double* lon, double* lat, double* HDOP, int* numSV) {
 		cerr << "checksum failed: " << check << " " << cs << endl;
 		return false;
 	}
-
+#endif
 	//processing data;
 	string str1 = slat.substr(0, 2), str2 = slon.substr(0, 3);
 	slat.erase(0, 2);

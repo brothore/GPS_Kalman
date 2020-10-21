@@ -14,19 +14,38 @@
 #include <iomanip>
 #include <sys/time.h>
 #include <time.h>	
+#include <sys/ipc.h>
+#include <sys/shm.h>
 #include "gps.h"
 #include "gpsparser.h"
 
-
+#include "coordinate_sys.h"
+#include "cJSON.h"
+#include "serial.h"
 // void gps_init(double noise);
 // void gps_update(double lat, double lon, double seconds_since_last_timestep);
 // void gps_read(double* lat, double* lon);
 // bool gpsparser(char* data, double* lon, double* lat, double* HDOP, int* numSV)
+#define MQTT_SIP "gpscar.xiaovdiy.cn"
+
+#define MYKEY 1234
+#define BUF_SIZE 1024
+
 
 using namespace std;
 
 const double timestep = 0.100;
 const double noise = 1.000;
+typedef struct
+{    
+    char isvalid;
+	Location gpsInf;
+}use_shared;
+unsigned short point1 = 0;
+unsigned short  point_start = 0;
+
+_SaveData Save_Data;
+
 
 int set_opt(int fd, int nSpeed, int nBits, char nEvent, int nStop) {
 	struct termios newtio, oldtio;
@@ -185,15 +204,23 @@ int open_port(int fd, int comport) {
 			printf("open ttyS1 ......\n");
 	}
 	else if (comport == 3) {
-		fd = open("/dev/ttyUSB0", O_RDWR | O_NOCTTY);
+		fd = open("/dev/ttygps", O_RDWR | O_NOCTTY);
 		if (-1 == fd) {
 			perror("Can't Open Serial Port");
 			return (-1);
 		}
 		else
-			printf("open ttyUSB0 ......\n");
+			printf("open ttygps ......\n");
 	}
-
+	else if (comport == 4) {
+		fd = open("/dev/ttyACM0", O_RDWR | O_NOCTTY);
+		if (-1 == fd) {
+			perror("Can't Open Serial Port");
+			return (-1);
+		}
+		else
+			printf("open ttygps ......\n");
+	}
 	/*
 	*	Block the serial port
 	*/
@@ -214,6 +241,166 @@ int open_port(int fd, int comport) {
 	return fd;
 }
 
+int Creatstatejson(Location gpsval)
+{
+	char tmp_buf[0xff]={0};
+	char topic_buf[0xff]={0};
+	unsigned char  value_buf[0xff]={0};
+	 char  send_buf[0xff]={0};
+
+	memcpy(topic_buf,"/state/gps",sizeof("/state/gps"));
+
+
+    cJSON * root =  cJSON_CreateObject();
+  if(!root) {
+         printf("get root faild !\n");
+     }else printf("get root success!\n");
+ //   cJSON_AddItemToObject(root, "\"type\"", cJSON_CreateNumber(0));//?¨´?¨²¦Ì???¨¬¨ª?¨®
+  //  cJSON_AddItemToObject(root, "\"devid\"", cJSON_CreateString(chargename));
+    cJSON_AddItemToObject(root, "\"isvalid\"", cJSON_CreateNumber(1));
+    cJSON_AddItemToObject(root, "\"lonti\"", cJSON_CreateNumber(gpsval.lng));//¨¬¨ª?¨®name?¨²¦Ì?
+    cJSON_AddItemToObject(root, "\"lati\"",cJSON_CreateNumber(gpsval.lat));//¨¬¨ª?¨®name?¨²¦Ì?
+ 
+   // mqtt_publish(tmp_buf,cJSON_Print(root));
+    memcpy(value_buf,cJSON_Print(root),strlen(cJSON_Print(root)));
+      
+
+	sprintf(send_buf,"mosquitto_pub -t %s  -m \"%s\"",topic_buf,value_buf);
+	system(send_buf);
+	// printf("%s\n", tmp_buf);
+        //printf("%s\n", publishstring.pMessage);
+
+    cJSON_Delete(root);
+
+    return 0;
+}
+
+/*******************************************************************************
+* function name	: parseGpsBuffer
+* description	: 
+*
+* param[in] 	: 
+* param[out] 	: none
+* return 		: none
+*******************************************************************************/
+void parseGpsBuffer()
+{
+	char *subString;
+	char *subStringNext;
+	char i = 0;
+	if (Save_Data.isGetData)
+	{
+		Save_Data.isGetData = false;
+	//	printf("**************\r\n");
+		//printf(Save_Data.GPS_Buffer);
+
+		for (i = 0 ; i <= 9; i++)
+		{
+			if (i == 0)
+			{
+				if ((subString = strstr(Save_Data.GPS_Buffer, ",")) == NULL)
+					printf("error");	//½âÎö´íÎó
+			}
+			else
+			{
+				subString++;
+				if ((subStringNext = strstr(subString, ",")) != NULL)
+				{
+					char usefullBuffer[2]; 
+					switch(i)
+					{
+						case 1:memcpy(Save_Data.UTCTime, subString, subStringNext - subString);break;	//»ñÈ¡UTCÊ±¼ä
+						case 2:memcpy(usefullBuffer, subString, subStringNext - subString);break;	//»ñÈ¡UTCÊ±¼ä
+						case 3:memcpy(Save_Data.latitude, subString, subStringNext - subString);break;	//»ñÈ¡Î³¶ÈÐÅÏ¢
+						case 4:memcpy(Save_Data.N_S, subString, subStringNext - subString);break;	//»ñÈ¡N/S
+						case 5:memcpy(Save_Data.longitude, subString, subStringNext - subString);break;	//»ñÈ¡¾­¶ÈÐÅÏ¢
+						case 6:memcpy(Save_Data.E_W, subString, subStringNext - subString);break;	//»ñÈ¡E/W
+						case 7:memcpy(Save_Data.earthSpeed, subString, subStringNext - subString);
+						//	  DEBUG(LOG_DEBUG, "speed:%s \n",Save_Data.earthSpeed);
+						break;
+						case 8:memcpy(Save_Data.earthHeading, subString, subStringNext - subString);
+							//  DEBUG(LOG_DEBUG, "head:%s \n",Save_Data.earthHeading);
+						break;
+						case 9:memcpy(Save_Data.UTCDate, subString, subStringNext - subString);
+						//	DEBUG(LOG_DEBUG, "UTCDate:%s \n",Save_Data.UTCDate);
+						break;
+						default:break;
+					}
+
+					subString = subStringNext;
+					Save_Data.isParseData = true;
+					if(usefullBuffer[0] == 'A')
+						Save_Data.isUsefull = true;
+					else if(usefullBuffer[0] == 'V')
+						Save_Data.isUsefull = false;
+
+				}
+				else
+				{
+						//½âÎö´íÎó
+				}
+			}
+
+
+		}
+	}
+}
+/*******************************************************************************
+* function name	: parseGpsBuffer
+* description	: 
+*
+* param[in] 	: 
+* param[out] 	: none
+* return 		: none
+*******************************************************************************/
+int gps_Data_Deal(unsigned char *datv,int length)
+{
+	unsigned char Res;
+	unsigned char i=0;
+	
+	//DEBUG(LOG_DEBUG,"gps rec len:%d  \n",length);
+    for(i=0;i<length;i++)
+   	{       
+	//	printf("%c",datv[i]);
+	    if(datv[i]=='\n')	
+			break;
+    }
+	point1 =i;
+	//DEBUG(LOG_DEBUG,"gps rec total:%d \n",i);
+	 for(i=0;i<length;i++)
+   	{
+        if(datv[i]=='G')
+        	{
+		 	  point_start=i;
+	//		DEBUG(LOG_DEBUG,"gps rec start:%d  \n",point_start);
+			break;
+        	}
+    }
+
+
+	if((datv[point_start] == 'G') && (datv[3+point_start] == 'M') && (datv[point_start+4] == 'C'))//È·¶¨ÊÇ·ñÊÕµ½"GPRMC/GNRMC"ÕâÒ»Ö¡Êý¾Ý
+	{
+		 
+	 //   DEBUG(LOG_DEBUG,"gps head analysis ok  \n");
+		if(datv[point1] == '\n')									   
+		{
+		 //   DEBUG(LOG_DEBUG,"gps rec end:%d  \n",point1);
+			memset(Save_Data.GPS_Buffer, 0, GPS_Buffer_Length);      //Çå¿Õ
+			memcpy(Save_Data.GPS_Buffer, datv+point_start, point1); 	//±£´æÊý¾Ý
+			Save_Data.isGetData = true;
+			point1 = 0;
+			point_start =0;
+			//memset(USART_RX_BUF, 0, USART_REC_LEN);      //Çå¿Õ				
+		}	
+				
+	}
+
+     parseGpsBuffer();
+    // printGpsBuffer();
+
+
+}
+
 int main(void) {
 	int fd = -1;
 	int nread,nwrite;
@@ -230,7 +417,23 @@ int main(void) {
 	struct tm *timenow;
 	struct timeval  tick;
 	long sec;
-
+	Location loc_coor;
+    int shmid; 
+    void *shmptr;
+	use_shared *shared;
+    if((shmid = shmget(MYKEY,BUF_SIZE,0666|IPC_CREAT)) ==-1) 
+    { 
+        printf("shmget error \n"); 
+        exit(1); 
+     }
+     if((shmptr =shmat(shmid,0,0))==(void *)-1) 
+     { 
+        printf("shmat error!\n"); 
+        exit(1); 
+     }
+	 
+	shared = (use_shared*)shmptr;
+	shared->isvalid = 0;
 	// save the raw data and filtered data
 	ofstream file1,file2;
 	file1.open ("data/raw_data.txt", ios::out | ios::app);
@@ -251,11 +454,11 @@ int main(void) {
 	file2.setf(ios::fixed);
 	file2.precision(7);
 
-	if ((fd = open_port(fd, 3)) < 0) {
+	if ((fd = open_port(fd, 4)) < 0) {
 		perror("open_port error");
 		return 1;
 	}
-	if (set_opt(fd, 460800, 8, 'N', 1) < 0) {
+	if (set_opt(fd, 9600, 8, 'N', 1) < 0) {
 		perror("set_opt error");
 		return 1;
 	}
@@ -272,40 +475,74 @@ int main(void) {
    	while(1){
    		nread = read(fd, readbuff, sizeof(readbuff));     //è¯»ä¸²å£æ•°æ®  
    		if(nread > 0){
-      		//printf("msg: %slen: %d\n", readbuff,nread);    //è¾“å‡ºè¯»åˆ°çš„æ•°æ®
-      		if(gpsparser(readbuff,&lat,&lon,&HDOP,&numSV)){
-      			
-      			gps_update(lat,lon,timestep);
-      			gps_read(&lat_filt,&lon_filt);
-      			time(&now);
-      			timenow = localtime(&now);
-      			gettimeofday(&tick,NULL);
-      			sec = tick.tv_usec/10000;
-      			double dist = get_distance(lat_old,lon_old,lat,lon);
-      			double dist1 = get_distance(lat_filt_old,lon_filt_old,lat_filt,lon_filt);
-      			lat_old = lat, lon_old = lon;
-      			lat_filt_old = lat_filt, lon_filt_old = lon_filt;
-      			printf("%2d:%2d:%2d:%2ld\tlat:  %f\tlon:  %f\t\tbias: %f\tbias2: %f\n",\
-      				timenow->tm_hour,timenow->tm_min,timenow->tm_sec,sec,lat,lon,dist,dist1);
-      			printf("        \tlatf: %f\tlonf: %f\t\tHDOP:%f\tnumSV:%d\n\n", lat_filt,lon_filt,HDOP,numSV);
-      			file1<<lat<<" "<<lon<<endl;
-      			file2<<lat_filt<<" "<<lon_filt<<endl;
-      			nread = 0;
-      		}
-      		else{
-      			nread = 0;
-      			printf("\nmsg: %s\n\n", readbuff);
+				gps_Data_Deal((unsigned char *)readbuff, nread);
+    
+				if (Save_Data.isParseData)
+				{
+					Save_Data.isParseData = false;
+					
+						if(Save_Data.isUsefull)
+					{
+						
+						Save_Data.isUsefull = false;
+						
+						{
+			      			
+								
+							lon = degree_minute2dec_degrees(atof(Save_Data.longitude));
+							lat = degree_minute2dec_degrees(atof(Save_Data.latitude));
 
-      			++cnt;
-      			if(cnt%10==0)	printf("parse failed %ld times\n",cnt);
-      		}
-      		//only test once
-      		//break;
-   		}
-   	}
+			      			gps_update(lat,lon,timestep);
+			      			gps_read(&lat_filt,&lon_filt);
+			      			time(&now);
+			      			timenow = localtime(&now);
+			      			gettimeofday(&tick,NULL);
+			      			sec = tick.tv_usec/10000;
+			      			double dist = get_distance(lat_old,lon_old,lat,lon);
+			      			double dist1 = get_distance(lat_filt_old,lon_filt_old,lat_filt,lon_filt);
+			      			lat_old = lat, lon_old = lon;
+			      			lat_filt_old = lat_filt, lon_filt_old = lon_filt;
+			      			printf("%2d:%2d:%2d:%2ld\tlat:  %f\tlon:  %f\t\tbias: %f\tbias2: %f\n",\
+			      				timenow->tm_hour,timenow->tm_min,timenow->tm_sec,sec,lat,lon,dist,dist1);
+			      			printf("        \tlatf: %f\tlonf: %f\t\tHDOP:%f\tnumSV:%d\n\n", lat_filt,lon_filt,HDOP,numSV);
+			      			file1<<lat<<" "<<lon<<endl;
+			      			file2<<lat_filt<<" "<<lon_filt<<endl;
+
+							nread = 0;
+
+							loc_coor =  WGS84tobaidu(lon,lat);
+							Creatstatejson(loc_coor);	
+							shared->isvalid =1;
+			                shared->gpsInf = loc_coor;			
+			      		}
+						
+							 
+							
+					}
+			   }
+		
+		}
+	
+		
+	}
+
+   	
 
    	file1.close();
    	file2.close();
 	close(fd);
+	if(shmdt(shmptr) == -1)
+	{
+		fprintf(stderr, "shmdt failed\n");
+		exit(EXIT_FAILURE);
+	}
+	//åˆ é™¤å…±äº«å†…å­˜
+	if(shmctl(shmid, IPC_RMID, 0) == -1)
+	{
+		fprintf(stderr, "shmctl(IPC_RMID) failed\n");
+		exit(EXIT_FAILURE);
+	}
+	exit(EXIT_SUCCESS);
+
 	return 0;
 }
