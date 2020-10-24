@@ -186,7 +186,7 @@ int open_port(int fd, int comport) {
 	//char* dev[] = {"/dev/ttyS0","/dev/ttyS1","/dev/ttyUSB0"};
 	//long vdisable;
 	if (comport == 1) {
-		fd = open("/dev/ttyS0", O_RDWR | O_NOCTTY | O_NDELAY);
+		fd = open("/dev/ttyAMA0", O_RDWR | O_NOCTTY | O_NDELAY);
 		if (-1 == fd) {
 			perror("Can't Open Serial Port");
 			return (-1);
@@ -454,7 +454,7 @@ int main(void) {
 	file2.setf(ios::fixed);
 	file2.precision(7);
 
-	if ((fd = open_port(fd, 4)) < 0) {
+	if ((fd = open_port(fd, 1)) < 0) {
 		perror("open_port error");
 		return 1;
 	}

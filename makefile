@@ -32,5 +32,5 @@ _PRE:
 
 .PHONY: clean
 clean:  
-	rm -fr build
+	rm -fr build 
 
