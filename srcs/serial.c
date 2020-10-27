@@ -243,7 +243,7 @@ int open_port(int fd, int comport) {
 	return fd;
 }
 
-int Creatstatejson(Location gpsval)
+int Creatstatejson(Location gpsval,float h,float vel)
 {
 	char tmp_buf[0xff]={0};
 	char topic_buf[0xff]={0};
@@ -262,7 +262,8 @@ int Creatstatejson(Location gpsval)
     cJSON_AddItemToObject(root, "\"isvalid\"", cJSON_CreateNumber(1));
     cJSON_AddItemToObject(root, "\"lonti\"", cJSON_CreateNumber(gpsval.lng));//ìí?óname?úμ?
     cJSON_AddItemToObject(root, "\"lati\"",cJSON_CreateNumber(gpsval.lat));//ìí?óname?úμ?
- 
+    cJSON_AddItemToObject(root, "\"gpsheading\"", cJSON_CreateNumber(h));//
+    cJSON_AddItemToObject(root, "\"gpsvelocity\"",cJSON_CreateNumber(vel)); 
    // mqtt_publish(tmp_buf,cJSON_Print(root));
     memcpy(value_buf,cJSON_Print(root),strlen(cJSON_Print(root)));
       
@@ -514,7 +515,7 @@ int main(void) {
 							nread = 0;
 
 							loc_coor =  WGS84tobaidu(lon,lat);
-							Creatstatejson(loc_coor);	
+							Creatstatejson(loc_coor,atof(Save_Data.earthHeading),atof(Save_Data.earthSpeed));	
 							shared->isvalid =1;
 			                                shared->gpsInf = loc_coor;
 							shared->gpsheading = atof(Save_Data.earthHeading);
