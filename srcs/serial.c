@@ -192,7 +192,7 @@ int open_port(int fd, int comport) {
 			return (-1);
 		}
 		else
-			printf("open ttyS0 ......\n");
+			printf("open ttyAMA0 ......\n");
 	}
 	else if (comport == 2) {
 		fd = open("/dev/ttyS1", O_RDWR | O_NOCTTY | O_NDELAY);
@@ -358,7 +358,7 @@ int gps_Data_Deal(unsigned char *datv,int length)
 	unsigned char Res;
 	unsigned char i=0;
 	
-	//DEBUG(LOG_DEBUG,"gps rec len:%d  \n",length);
+    printf("igps rec len:%d  \n",length);
     for(i=0;i<length;i++)
    	{       
 	//	printf("%c",datv[i]);
@@ -377,8 +377,7 @@ int gps_Data_Deal(unsigned char *datv,int length)
         	}
     }
 
-
-	if((datv[point_start] == 'G') && (datv[3+point_start] == 'M') && (datv[point_start+4] == 'C'))//确定是否收到"GPRMC/GNRMC"这一帧数据
+       if((datv[point_start] == 'G') && (datv[3+point_start] == 'M') && (datv[point_start+4] == 'C'))//GPRMC/GNRMC
 	{
 		 
 	 //   DEBUG(LOG_DEBUG,"gps head analysis ok  \n");
