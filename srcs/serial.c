@@ -39,7 +39,9 @@ const double noise = 1.000;
 typedef struct
 {    
     char isvalid;
-	Location gpsInf;
+    Location gpsInf;
+    float gpsheading;
+    float gpsvelocity;
 }use_shared;
 unsigned short point1 = 0;
 unsigned short  point_start = 0;
@@ -155,12 +157,12 @@ int set_opt(int fd, int nSpeed, int nBits, char nEvent, int nStop) {
 
 	/******************** Canonical Mode***********************/
 	/*
-	 Raw 模式输出.
+	 Raw 妯″紡杈撳嚭.
 	*/
  	newtio.c_oflag = 0;
  
 	/*
-	  ICANON  : 致能标准输入, 使所有回应机能停用, 并不送出信号以叫用程序
+	  ICANON  : 鑷磋兘鏍囧噯杈撳叆, 浣挎墍鏈夊洖搴旀満鑳藉仠鐢�, 骞朵笉閫佸嚭淇″彿浠ュ彨鐢ㄧ▼搴�
 	*/
  	newtio.c_lflag = ICANON;
  	/********************************************/
@@ -255,11 +257,11 @@ int Creatstatejson(Location gpsval)
   if(!root) {
          printf("get root faild !\n");
      }else printf("get root success!\n");
- //   cJSON_AddItemToObject(root, "\"type\"", cJSON_CreateNumber(0));//?��?����???����?��
+ //   cJSON_AddItemToObject(root, "\"type\"", cJSON_CreateNumber(0));//?ù?úμ???ìí?ó
   //  cJSON_AddItemToObject(root, "\"devid\"", cJSON_CreateString(chargename));
     cJSON_AddItemToObject(root, "\"isvalid\"", cJSON_CreateNumber(1));
-    cJSON_AddItemToObject(root, "\"lonti\"", cJSON_CreateNumber(gpsval.lng));//����?��name?����?
-    cJSON_AddItemToObject(root, "\"lati\"",cJSON_CreateNumber(gpsval.lat));//����?��name?����?
+    cJSON_AddItemToObject(root, "\"lonti\"", cJSON_CreateNumber(gpsval.lng));//ìí?óname?úμ?
+    cJSON_AddItemToObject(root, "\"lati\"",cJSON_CreateNumber(gpsval.lat));//ìí?óname?úμ?
  
    // mqtt_publish(tmp_buf,cJSON_Print(root));
     memcpy(value_buf,cJSON_Print(root),strlen(cJSON_Print(root)));
@@ -299,7 +301,7 @@ void parseGpsBuffer()
 			if (i == 0)
 			{
 				if ((subString = strstr(Save_Data.GPS_Buffer, ",")) == NULL)
-					printf("error");	//��������
+					printf("error");	//解析错误
 			}
 			else
 			{
@@ -309,12 +311,12 @@ void parseGpsBuffer()
 					char usefullBuffer[2]; 
 					switch(i)
 					{
-						case 1:memcpy(Save_Data.UTCTime, subString, subStringNext - subString);break;	//��ȡUTCʱ��
-						case 2:memcpy(usefullBuffer, subString, subStringNext - subString);break;	//��ȡUTCʱ��
-						case 3:memcpy(Save_Data.latitude, subString, subStringNext - subString);break;	//��ȡγ����Ϣ
-						case 4:memcpy(Save_Data.N_S, subString, subStringNext - subString);break;	//��ȡN/S
-						case 5:memcpy(Save_Data.longitude, subString, subStringNext - subString);break;	//��ȡ������Ϣ
-						case 6:memcpy(Save_Data.E_W, subString, subStringNext - subString);break;	//��ȡE/W
+						case 1:memcpy(Save_Data.UTCTime, subString, subStringNext - subString);break;	//获取UTC时间
+						case 2:memcpy(usefullBuffer, subString, subStringNext - subString);break;	//获取UTC时间
+						case 3:memcpy(Save_Data.latitude, subString, subStringNext - subString);break;	//获取纬度信息
+						case 4:memcpy(Save_Data.N_S, subString, subStringNext - subString);break;	//获取N/S
+						case 5:memcpy(Save_Data.longitude, subString, subStringNext - subString);break;	//获取经度信息
+						case 6:memcpy(Save_Data.E_W, subString, subStringNext - subString);break;	//获取E/W
 						case 7:memcpy(Save_Data.earthSpeed, subString, subStringNext - subString);
 						//	  DEBUG(LOG_DEBUG, "speed:%s \n",Save_Data.earthSpeed);
 						break;
@@ -337,7 +339,7 @@ void parseGpsBuffer()
 				}
 				else
 				{
-						//��������
+						//解析错误
 				}
 			}
 
@@ -378,18 +380,20 @@ int gps_Data_Deal(unsigned char *datv,int length)
     }
 
        if((datv[point_start] == 'G') && (datv[3+point_start] == 'M') && (datv[point_start+4] == 'C'))//GPRMC/GNRMC
+
+	if((datv[point_start] == 'G') && (datv[3+point_start] == 'M') && (datv[point_start+4] == 'C'))//确定是否收到"GPRMC/GNRMC"这一帧数据
 	{
 		 
 	 //   DEBUG(LOG_DEBUG,"gps head analysis ok  \n");
 		if(datv[point1] == '\n')									   
 		{
 		 //   DEBUG(LOG_DEBUG,"gps rec end:%d  \n",point1);
-			memset(Save_Data.GPS_Buffer, 0, GPS_Buffer_Length);      //���
-			memcpy(Save_Data.GPS_Buffer, datv+point_start, point1); 	//��������
+			memset(Save_Data.GPS_Buffer, 0, GPS_Buffer_Length);      //清空
+			memcpy(Save_Data.GPS_Buffer, datv+point_start, point1); 	//保存数据
 			Save_Data.isGetData = true;
 			point1 = 0;
 			point_start =0;
-			//memset(USART_RX_BUF, 0, USART_REC_LEN);      //���				
+			//memset(USART_RX_BUF, 0, USART_REC_LEN);      //清空				
 		}	
 				
 	}
@@ -464,7 +468,7 @@ int main(void) {
 	printf("Starting! ......\n\n");
 
 	//Test serial port
-	nwrite = write(fd, sendbuff, sizeof(sendbuff));        //写串口  
+	nwrite = write(fd, sendbuff, sizeof(sendbuff));        //鍐欎覆鍙�  
     if(nwrite < 0){  
       	perror("write error");
     }
@@ -472,7 +476,7 @@ int main(void) {
     gps_init(noise);
 
    	while(1){
-   		nread = read(fd, readbuff, sizeof(readbuff));     //读串口数据  
+   		nread = read(fd, readbuff, sizeof(readbuff));     //璇讳覆鍙ｆ暟鎹�  
    		if(nread > 0){
 				gps_Data_Deal((unsigned char *)readbuff, nread);
     
@@ -512,7 +516,9 @@ int main(void) {
 							loc_coor =  WGS84tobaidu(lon,lat);
 							Creatstatejson(loc_coor);	
 							shared->isvalid =1;
-			                shared->gpsInf = loc_coor;			
+			                                shared->gpsInf = loc_coor;
+							shared->gpsheading = atof(Save_Data.earthHeading);
+                                                        shared->gpsvelocity = atof(Save_Data.earthSpeed);
 			      		}
 						
 							 
@@ -535,7 +541,7 @@ int main(void) {
 		fprintf(stderr, "shmdt failed\n");
 		exit(EXIT_FAILURE);
 	}
-	//删除共享内存
+	//鍒犻櫎鍏变韩鍐呭瓨
 	if(shmctl(shmid, IPC_RMID, 0) == -1)
 	{
 		fprintf(stderr, "shmctl(IPC_RMID) failed\n");
