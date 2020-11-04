@@ -515,11 +515,11 @@ int main(void) {
 							nread = 0;
 
 							loc_coor =  WGS84tobaidu(lon,lat);
-							Creatstatejson(loc_coor,atof(Save_Data.earthHeading),atof(Save_Data.earthSpeed));	
+							Creatstatejson(loc_coor,atof(Save_Data.earthHeading),atof(Save_Data.earthSpeed)*1.852/3.6);	
 							shared->isvalid =1;
 			                                shared->gpsInf = loc_coor;
 							shared->gpsheading = atof(Save_Data.earthHeading);
-                                                        shared->gpsvelocity = atof(Save_Data.earthSpeed);
+                                                        shared->gpsvelocity = atof(Save_Data.earthSpeed)*1.852/3.6;
 			      		}
 						
 							 
